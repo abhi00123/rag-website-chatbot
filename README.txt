@@ -70,7 +70,7 @@ COMPONENT BREAKDOWN
 -------------------
 
 1. Frontend (HTML, CSS, JavaScript)
-- ChatGPT-style user interface
+- Chatbot-style user interface
 - URL input for website crawling
 - Chat input for questions
 - Displays chat history
