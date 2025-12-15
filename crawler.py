@@ -1,43 +1,69 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
+import requests
+from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
-import time
 
-
-def crawl_website(base_url, max_depth=2):
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
-
-    driver = webdriver.Chrome(options=options)
-
+def crawl_website(
+    base_url,
+    max_depth=2,
+    max_pages=60,
+    max_chars=150000
+):
     visited = set()
-    results = []
+    texts = []
+    total_chars = 0
+
+    base_domain = urlparse(base_url).netloc
 
     def crawl(url, depth):
-        if depth > max_depth or url in visited:
+        nonlocal total_chars
+
+        if (
+            depth > max_depth
+            or url in visited
+            or len(visited) >= max_pages
+            or total_chars >= max_chars
+        ):
             return
 
         visited.add(url)
 
         try:
-            driver.get(url)
-            time.sleep(3)
+            response = requests.get(
+                url,
+                timeout=4,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
 
-            text = driver.find_element(By.TAG_NAME, "body").text
-            results.append(text)
+            if "text/html" not in response.headers.get("Content-Type", ""):
+                return
 
-            links = driver.find_elements(By.TAG_NAME, "a")
-            for link in links:
-                href = link.get_attribute("href")
-                if href and urlparse(href).netloc == urlparse(base_url).netloc:
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            for tag in soup(["script", "style", "noscript", "img", "svg"]):
+                tag.decompose()
+
+            page_text = soup.get_text(separator=" ", strip=True)
+
+            if page_text:
+                texts.append(page_text)
+                total_chars += len(page_text)
+
+            for link in soup.find_all("a", href=True):
+                if total_chars >= max_chars:
+                    break
+
+                href = urljoin(base_url, link["href"])
+                parsed = urlparse(href)
+
+                if (
+                    parsed.netloc == base_domain
+                    and not parsed.fragment
+                    and not href.endswith((".pdf", ".jpg", ".png", ".zip"))
+                ):
                     crawl(href, depth + 1)
 
         except Exception:
-            pass
+            return
 
     crawl(base_url, 0)
-    driver.quit()
-
-    return results
+    return texts

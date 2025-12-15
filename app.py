@@ -1,11 +1,11 @@
 import streamlit as st
-from selenium_crawler import crawl_website
+from crawler import crawl_website
 from text_processor import chunk_text
 from embeddings import create_faiss_index
 from rag_chatbot import ask_question
 
 st.set_page_config(page_title="Trippy Web-Chatbot", layout="wide")
-#title
+
 st.title("Trippy Web-Chatbot")
 
 if "index" not in st.session_state:
@@ -20,18 +20,26 @@ with st.sidebar:
     url = st.text_input("Enter Website URL")
 
     if st.button("Build Knowledge Base", use_container_width=True):
-        if url:
-            with st.spinner("Building knowledge base..."):
-                pages = crawl_website(url)
-                text = " ".join(pages)
-                chunks = chunk_text(text)
-                index, _ = create_faiss_index(chunks)
-                st.session_state.index = index
-                st.session_state.chunks = chunks
-                st.session_state.messages = []
-                st.success("Knowledge base built successfully")
-        else:
+        if not url:
             st.error("Please enter a website URL")
+        else:
+            with st.spinner("Building knowledge base, please wait..."):
+                pages = crawl_website(url)
+
+                if not pages:
+                    st.error("No readable content found on this website")
+                else:
+                    text = " ".join(pages)
+                    chunks = chunk_text(text, chunk_size=800)
+
+                    if not chunks:
+                        st.error("Text extraction failed")
+                    else:
+                        index, _ = create_faiss_index(chunks)
+                        st.session_state.index = index
+                        st.session_state.chunks = chunks
+                        st.session_state.messages = []
+                        st.success("Knowledge base built successfully")
 
     if st.button("Clear Chat", use_container_width=True):
         st.session_state.messages = []
@@ -51,6 +59,7 @@ if question:
         st.session_state.messages.append(
             {"role": "user", "content": question}
         )
+
         with st.chat_message("user"):
             st.markdown(question)
 
