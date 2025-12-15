@@ -1,41 +1,45 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
+from collections import deque
 
 def crawl_website(
     base_url,
     max_depth=2,
     max_pages=60,
-    max_chars=150000
+    max_chars=120000
 ):
     visited = set()
     texts = []
     total_chars = 0
 
     base_domain = urlparse(base_url).netloc
+    queue = deque()
+    queue.append((base_url, 0))
 
-    def crawl(url, depth):
-        nonlocal total_chars
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    while queue:
+        url, depth = queue.popleft()
 
         if (
-            depth > max_depth
-            or url in visited
+            url in visited
+            or depth > max_depth
             or len(visited) >= max_pages
             or total_chars >= max_chars
         ):
-            return
+            continue
 
         visited.add(url)
 
         try:
-            response = requests.get(
-                url,
-                timeout=4,
-                headers={"User-Agent": "Mozilla/5.0"}
-            )
+            response = requests.get(url, timeout=4, headers=headers)
+
+            if response.status_code != 200:
+                continue
 
             if "text/html" not in response.headers.get("Content-Type", ""):
-                return
+                continue
 
             soup = BeautifulSoup(response.text, "html.parser")
 
@@ -48,22 +52,20 @@ def crawl_website(
                 texts.append(page_text)
                 total_chars += len(page_text)
 
-            for link in soup.find_all("a", href=True):
-                if total_chars >= max_chars:
-                    break
+            if depth < max_depth:
+                for link in soup.find_all("a", href=True):
+                    href = urljoin(base_url, link["href"])
+                    parsed = urlparse(href)
 
-                href = urljoin(base_url, link["href"])
-                parsed = urlparse(href)
-
-                if (
-                    parsed.netloc == base_domain
-                    and not parsed.fragment
-                    and not href.endswith((".pdf", ".jpg", ".png", ".zip"))
-                ):
-                    crawl(href, depth + 1)
+                    if (
+                        parsed.netloc == base_domain
+                        and not parsed.fragment
+                        and not href.endswith((".pdf", ".jpg", ".png", ".zip"))
+                        and href not in visited
+                    ):
+                        queue.append((href, depth + 1))
 
         except Exception:
-            return
+            continue
 
-    crawl(base_url, 0)
     return texts

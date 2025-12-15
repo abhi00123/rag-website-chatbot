@@ -25,21 +25,24 @@ with st.sidebar:
         else:
             with st.spinner("Building knowledge base, please wait..."):
                 pages = crawl_website(url)
+                combined_text = " ".join(pages).strip()
 
-                if not pages:
-                    st.error("No readable content found on this website")
+                if not combined_text or len(combined_text) < 500:
+                    st.error(
+                        "This website blocks automated access from cloud servers. "
+                        "Try another site or run the app locally for this URL."
+                    )
+                    st.session_state.index = None
+                    st.session_state.chunks = None
                 else:
-                    text = " ".join(pages)
-                    chunks = chunk_text(text, chunk_size=800)
+                    chunks = chunk_text(combined_text, chunk_size=800)
+                    index, _ = create_faiss_index(chunks)
 
-                    if not chunks:
-                        st.error("Text extraction failed")
-                    else:
-                        index, _ = create_faiss_index(chunks)
-                        st.session_state.index = index
-                        st.session_state.chunks = chunks
-                        st.session_state.messages = []
-                        st.success("Knowledge base built successfully")
+                    st.session_state.index = index
+                    st.session_state.chunks = chunks
+                    st.session_state.messages = []
+
+                    st.success("Knowledge base built successfully")
 
     if st.button("Clear Chat", use_container_width=True):
         st.session_state.messages = []
