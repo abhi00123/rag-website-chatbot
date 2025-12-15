@@ -5,7 +5,7 @@ from embeddings import create_faiss_index
 from rag_chatbot import ask_question
 
 st.set_page_config(page_title="Trippy Web-Chatbot", layout="wide")
-
+#title
 st.title("Trippy Web-Chatbot")
 
 if "index" not in st.session_state:
